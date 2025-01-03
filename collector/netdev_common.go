@@ -23,6 +23,7 @@ import (
 	"log/slog"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/alecthomas/kingpin/v2"
@@ -36,6 +37,8 @@ var (
 	oldNetdevDeviceExclude = kingpin.Flag("collector.netdev.device-blacklist", "DEPRECATED: Use collector.netdev.device-exclude").Hidden().String()
 	netdevAddressInfo      = kingpin.Flag("collector.netdev.address-info", "Collect address-info for every device").Bool()
 	netdevDetailedMetrics  = kingpin.Flag("collector.netdev.enable-detailed-metrics", "Use (incompatible) metric names that provide more detailed stats on Linux").Bool()
+	dataNetdevDevice       = kingpin.Flag("collector.netdev.device-datalist", "Regexp collector.netdev.device-datalist").String()
+	dataDev = make(map[string]bool)
 )
 
 type netDevCollector struct {
@@ -83,6 +86,12 @@ func NewNetDevCollector(logger *slog.Logger) (Collector, error) {
 	if *netdevDeviceInclude != "" {
 		logger.Info("Parsed Flag --collector.netdev.device-include", "flag", *netdevDeviceInclude)
 	}
+	if *dataNetdevDevice != "" {
+		datadev := strings.Split(*dataNetdevDevice,",")
+		for _,k := range datadev {
+			dataDev[k]=true
+		}
+	}
 
 	return &netDevCollector{
 		subsystem:    "network",
@@ -123,9 +132,14 @@ func (c *netDevCollector) Update(ch chan<- prometheus.Metric) error {
 		if !*netdevDetailedMetrics {
 			legacy(devStats)
 		}
+		datavalue:= "0"
+		_,isdata := dataDev[dev]
+		if isdata {
+			datavalue= "1"
+		}
 
-		labels := []string{"device"}
-		labelValues := []string{dev}
+		labels := []string{"device","isdata"}
+		labelValues := []string{dev,datavalue}
 		if devLabels, exists := netDevLabels[dev]; exists {
 			for labelName, labelValue := range devLabels {
 				labels = append(labels, labelName)
